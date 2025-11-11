@@ -1,0 +1,142 @@
+import React from 'react';
+import PropTypes from 'prop-types'; // Recommended for type checking props
+
+/**
+ * A reusable Hero Section component that adapts content based on props.
+ * @param {object} props - The component props.
+ * @param {string} props.title - The main heading for the hero section.
+ * @param {string} props.subtitle - The secondary, descriptive text.
+ * @param {string} props.ctaText - The text for the call-to-action button.
+ * @param {string} props.ctaLink - The URL/path for the call-to-action button.
+ * @param {string} props.imageSrc - The source URL for the hero image.
+ * @param {string} props.imageAlt - The alt text for the hero image.
+ * @returns {JSX.Element} The Hero Section component.
+ */
+const HeroSection = ({
+  title,
+  subtitle,
+  ctaText,
+  ctaLink,
+  imageSrc,
+  imageAlt,
+}) => {
+  return (
+    <section className="hero-section bg-gray-50 py-16 md:py-24">
+      <div className="container mx-auto px-4 md:flex items-center">
+        {/* Left Side: Text Content */}
+        <div className="text-content md:w-1/2 mb-8 md:mb-0">
+          <h1 className="text-5xl font-extrabold text-gray-900 leading-tight">
+            {title}
+          </h1>
+          <p className="mt-4 text-xl text-gray-600 max-w-lg">
+            {subtitle}
+          </p>
+          <a
+            href={ctaLink}
+            className="mt-8 inline-block bg-orange-600 hover:bg-orange-700 text-white font-semibold py-3 px-6 rounded-lg transition duration-300 ease-in-out shadow-lg"
+          >
+            {ctaText}
+          </a>
+        </div>
+
+        {/* Right Side: Image */}
+        <div className="image-content md:w-1/2 flex justify-center">
+          <img
+            src={imageSrc}
+            alt={imageAlt}
+            className="max-w-full h-auto rounded-xl shadow-2xl"
+            // You can add different image classes depending on the layout style you want.
+            style={{ maxHeight: '400px', objectFit: 'cover' }}
+          />
+        </div>
+      </div>
+    </section>
+  );
+};
+
+// Define prop types for better debugging and code quality
+HeroSection.propTypes = {
+  title: PropTypes.string.isRequired,
+  subtitle: PropTypes.string.isRequired,
+  ctaText: PropTypes.string.isRequired,
+  ctaLink: PropTypes.string.isRequired,
+  imageSrc: PropTypes.string.isRequired,
+  imageAlt: PropTypes.string,
+};
+
+// Set default prop values for optional props
+HeroSection.defaultProps = {
+  imageAlt: 'Hero section feature image',
+};
+
+export default HeroSection;
+
+
+
+// src/heroContent.js (A file to hold your data)
+export const heroContent = {
+  landingPage: {
+    title: 'Mentions That Matter. Authority That Scales',
+    subtitle: 'Shaping how brands are found in search and AI discovery.',
+    ctaText: 'Get a Free Proposal',
+    ctaLink: '/proposal',
+    imageSrc: '/images/woman-cheering.png', // Replace with your actual image path
+    imageAlt: 'Excited woman celebrating with phone',
+  },
+  digitalPR: {
+    title: 'Digital PR Engineered for Search & AI',
+    subtitle: 'Campaigns that earn authority, build trust, and secure visibility across search and AI answers.',
+    ctaText: 'Get a Free Quote',
+    ctaLink: '/quote',
+    imageSrc: '/images/woman-on-laptop.png', // Replace with your actual image path
+    imageAlt: 'Woman working on a laptop surrounded by keywords',
+  },
+  // ... other sections/routes
+};
+
+
+
+
+// src/App.jsx (Simplified Example)
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import HeroSection from './components/HeroSection';
+import { heroContent } from './heroContent';
+
+// Page component for the Landing Page route
+const LandingPage = () => {
+  // Pull content specific to 'landingPage' from the data structure
+  const content = heroContent.landingPage;
+  return (
+    <>
+      <HeroSection {...content} />
+      {/* Rest of Landing Page content */}
+    </>
+  );
+};
+
+// Page component for the Digital PR route
+const DigitalPRPage = () => {
+  // Pull content specific to 'digitalPR' from the data structure
+  const content = heroContent.digitalPR;
+  return (
+    <>
+      <HeroSection {...content} />
+      {/* Rest of Digital PR Page content */}
+    </>
+  );
+};
+
+const App = () => (
+  <Router>
+    <Routes>
+      {/* Route 1 */}
+      <Route path="/" element={<LandingPage />} />
+      {/* Route 2 */}
+      <Route path="/digital-pr" element={<DigitalPRPage />} />
+      {/* ... other routes */}
+    </Routes>
+  </Router>
+);
+
+export default App;
