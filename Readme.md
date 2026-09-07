@@ -32,31 +32,28 @@ BEGIN TRY
     -- ============================================================
 
     IF NOT EXISTS
-    (
-        SELECT 1
-        FROM
-        (
-            SELECT
-                T.N.value('(Type/text())[1]', 'nvarchar(50)') AS TransactionType,
-                T.N.value('(HistoryID/text())[1]', 'bigint') AS TransactionHistoryId,
-                T.N.value('(Charge/text())[1]', 'decimal(19,4)') AS Charge,
-                T.N.value('(TermPremium/text())[1]', 'decimal(19,4)') AS TermPremium,
-                T.N.value('(NewPremium/text())[1]', 'decimal(19,4)') AS NewPremium
-            FROM @XmlData.nodes(
-                '/session/data/policy/line/transactions/transaction'
-            ) AS T(N)
-        ) AS X
-        WHERE X.TransactionType = 'Tail'
-          AND X.TransactionHistoryId = @HistoryId
-          AND X.Charge = 6
-          AND X.TermPremium = 6
-          AND X.NewPremium = 6
-    )
-    BEGIN
-        THROW 50001,
-              'SAFETY CHECK FAILED: Expected Tail transaction with HistoryID 692950 and Charge/TermPremium/NewPremium = 6 was not found. No changes were made.',
-              1;
-    END;
+(
+    SELECT 1
+    FROM @XmlData.nodes(
+        '/session/data/policy/line/transactions/transaction'
+    ) AS T(N)
+    WHERE
+        N.value('(Type/text())[1]', 'nvarchar(50)') = 'Tail'
+        AND N.value('(HistoryID/text())[1]', 'bigint') = 692950
+        AND N.value('(Charge/text())[1]', 'decimal(19,4)') = 6.0000
+        AND N.value('(TermPremium/text())[1]', 'decimal(19,4)') = 6.0000
+        AND N.value('(NewPremium/text())[1]', 'decimal(19,4)') = 6.0000
+)
+BEGIN
+    RAISERROR(
+        'SAFETY CHECK FAILED: Target Tail transaction was not found with the expected values. No changes were made.',
+        16,
+        1
+    );
+
+    ROLLBACK TRANSACTION;
+    RETURN;
+END;
 
 
     -- ============================================================
