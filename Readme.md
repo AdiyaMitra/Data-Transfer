@@ -199,3 +199,42 @@ SELECT
 FROM History
 WHERE HistoryId = 692950;
 ```
+
+``` sql
+USE PAC_Policy;
+
+DECLARE @HistoryId BIGINT = 692950;
+DECLARE @XmlData XML;
+
+SELECT @XmlData = CAST(XmlData AS XML)
+FROM History
+WHERE HistoryId = @HistoryId;
+
+
+SELECT
+    ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS TransactionNumber,
+
+    T.N.value('(Type/text())[1]', 'nvarchar(50)') AS TransactionType,
+
+    T.N.value('(HistoryID/text())[1]', 'bigint') AS TransactionHistoryId,
+
+    T.N.value('(Charge/text())[1]', 'decimal(19,4)') AS Charge,
+
+    T.N.value('(TermPremium/text())[1]', 'decimal(19,4)') AS TermPremium,
+
+    T.N.value('(NewPremium/text())[1]', 'decimal(19,4)') AS NewPremium,
+
+    CASE
+        WHEN T.N.value('(Type/text())[1]', 'nvarchar(50)') = 'Tail'
+         AND T.N.value('(HistoryID/text())[1]', 'bigint') = @HistoryId
+         AND T.N.value('(Charge/text())[1]', 'decimal(19,4)') = 6.0000
+         AND T.N.value('(TermPremium/text())[1]', 'decimal(19,4)') = 6.0000
+         AND T.N.value('(NewPremium/text())[1]', 'decimal(19,4)') = 6.0000
+        THEN 'MATCH'
+        ELSE 'NO MATCH'
+    END AS SafetyCheck
+
+FROM @XmlData.nodes(
+    '/session/data/policy/line/transactions/transaction'
+) AS T(N);
+```
