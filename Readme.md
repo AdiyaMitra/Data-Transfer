@@ -10,7 +10,7 @@ BEGIN TRY
     DECLARE @XmlData XML;
 
     -- ============================================================
-    -- 1. Load ONLY HistoryId = 692950
+    -- 1. Load the specific History record
     -- ============================================================
 
     SELECT @XmlData = CAST(XmlData AS XML)
@@ -19,51 +19,72 @@ BEGIN TRY
 
 
     -- ============================================================
-    -- 2. Safety check
+    -- 2. Verify History record exists
+    -- ============================================================
+
+    IF @XmlData IS NULL
+    BEGIN
+        RAISERROR(
+            'SAFETY CHECK FAILED: HistoryId 692950 was not found or XmlData is NULL. No changes were made.',
+            16,
+            1
+        );
+
+        ROLLBACK TRANSACTION;
+        RETURN;
+    END;
+
+
+    -- ============================================================
+    -- 3. SAFETY CHECK
     --
-    -- Make sure the targeted transaction is actually:
-    --     Type       = Tail
-    --     HistoryID  = 692950
-    --     Charge     = 6
-    --     TermPremium= 6
-    --     NewPremium = 6
+    -- We require EXACTLY:
     --
-    -- If any value is different, THROW and make NO changes.
+    -- Type        = Tail
+    -- HistoryID   = 692950
+    -- Charge      = 6
+    -- TermPremium = 6
+    -- NewPremium  = 6
+    --
+    -- If this exact transaction does not exist,
+    -- NOTHING will be changed.
     -- ============================================================
 
     IF NOT EXISTS
-(
-    SELECT 1
-    FROM @XmlData.nodes(
-        '/session/data/policy/line/transactions/transaction'
-    ) AS T(N)
-    WHERE
-        N.value('(Type/text())[1]', 'nvarchar(50)') = 'Tail'
-        AND N.value('(HistoryID/text())[1]', 'bigint') = 692950
-        AND N.value('(Charge/text())[1]', 'decimal(19,4)') = 6.0000
-        AND N.value('(TermPremium/text())[1]', 'decimal(19,4)') = 6.0000
-        AND N.value('(NewPremium/text())[1]', 'decimal(19,4)') = 6.0000
-)
-BEGIN
-    RAISERROR(
-        'SAFETY CHECK FAILED: Target Tail transaction was not found with the expected values. No changes were made.',
-        16,
-        1
-    );
+    (
+        SELECT 1
+        FROM @XmlData.nodes('//transaction') AS T(N)
+        WHERE
+            T.N.value('(Type/text())[1]', 'nvarchar(50)') = 'Tail'
+            AND
+            T.N.value('(HistoryID/text())[1]', 'bigint') = @HistoryId
+            AND
+            T.N.value('(Charge/text())[1]', 'decimal(19,4)') = 6.0000
+            AND
+            T.N.value('(TermPremium/text())[1]', 'decimal(19,4)') = 6.0000
+            AND
+            T.N.value('(NewPremium/text())[1]', 'decimal(19,4)') = 6.0000
+    )
+    BEGIN
+        RAISERROR(
+            'SAFETY CHECK FAILED: Tail transaction 692950 is not currently Charge=6, TermPremium=6, NewPremium=6. No changes were made.',
+            16,
+            1
+        );
 
-    ROLLBACK TRANSACTION;
-    RETURN;
-END;
+        ROLLBACK TRANSACTION;
+        RETURN;
+    END;
 
 
     -- ============================================================
-    -- 3. Update ONLY Charge
+    -- 4. Update ONLY Charge
     -- ============================================================
 
     SET @XmlData.modify('
         replace value of
         (
-            /session/data/policy/line/transactions/transaction
+            //transaction
             [Type="Tail" and HistoryID=sql:variable("@HistoryId")]
             /Charge/text()
         )[1]
@@ -72,13 +93,13 @@ END;
 
 
     -- ============================================================
-    -- 4. Update ONLY TermPremium
+    -- 5. Update ONLY TermPremium
     -- ============================================================
 
     SET @XmlData.modify('
         replace value of
         (
-            /session/data/policy/line/transactions/transaction
+            //transaction
             [Type="Tail" and HistoryID=sql:variable("@HistoryId")]
             /TermPremium/text()
         )[1]
@@ -87,13 +108,13 @@ END;
 
 
     -- ============================================================
-    -- 5. Update ONLY NewPremium
+    -- 6. Update ONLY NewPremium
     -- ============================================================
 
     SET @XmlData.modify('
         replace value of
         (
-            /session/data/policy/line/transactions/transaction
+            //transaction
             [Type="Tail" and HistoryID=sql:variable("@HistoryId")]
             /NewPremium/text()
         )[1]
@@ -102,9 +123,7 @@ END;
 
 
     -- ============================================================
-    -- 6. Update ONLY History.XMLData
-    --
-    -- No other relational columns are changed.
+    -- 7. Update ONLY History.XmlData
     -- ============================================================
 
     UPDATE History
@@ -113,7 +132,7 @@ END;
 
 
     -- ============================================================
-    -- 7. Verify the exact transaction BEFORE COMMIT
+    -- 8. Verify BEFORE COMMIT
     -- ============================================================
 
     SELECT
@@ -122,18 +141,24 @@ END;
         T.N.value('(Charge/text())[1]', 'decimal(19,4)') AS Charge,
         T.N.value('(TermPremium/text())[1]', 'decimal(19,4)') AS TermPremium,
         T.N.value('(NewPremium/text())[1]', 'decimal(19,4)') AS NewPremium
-    FROM @XmlData.nodes(
-        '/session/data/policy/line/transactions/transaction'
-    ) AS T(N)
-    WHERE T.N.value('(Type/text())[1]', 'nvarchar(50)') = 'Tail'
-      AND T.N.value('(HistoryID/text())[1]', 'bigint') = @HistoryId;
+    FROM @XmlData.nodes('//transaction') AS T(N)
+    WHERE
+        T.N.value('(Type/text())[1]', 'nvarchar(50)') = 'Tail'
+        AND
+        T.N.value('(HistoryID/text())[1]', 'bigint') = @HistoryId;
 
 
     -- ============================================================
-    -- 8. COMMIT
+    -- 9. COMMIT
     -- ============================================================
 
     COMMIT TRANSACTION;
+
+    SELECT
+        'SUCCESS' AS Status,
+        @HistoryId AS HistoryId,
+        @NewValue AS NewValue,
+        'Charge, TermPremium and NewPremium updated successfully.' AS Message;
 
 END TRY
 
@@ -146,8 +171,6 @@ BEGIN CATCH
         ERROR_NUMBER() AS ErrorNumber,
         ERROR_MESSAGE() AS ErrorMessage,
         'ROLLBACK - NO CHANGES COMMITTED' AS Status;
-
-    THROW;
 
 END CATCH;
 ```
