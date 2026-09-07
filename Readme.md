@@ -159,7 +159,7 @@ END CATCH;
 
 
 
-
+```sql
 USE PAC_Policy;
 
 DECLARE @HistoryId BIGINT = 692950;
@@ -187,3 +187,4 @@ SELECT
 FROM @XmlData.nodes(
     '/session/data/policy/line/transactions/transaction'
 ) AS T(N);
+```
