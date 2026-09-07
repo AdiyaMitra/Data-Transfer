@@ -1,159 +1,156 @@
-Use PAC_Policy
+```sql
+USE PAC_Policy;
 
 BEGIN TRY
--- to run comment out the goto line below
---     goto Stop -- while developing to prevent accidental run
-BEGIN TRANSACTION 
+
+    BEGIN TRANSACTION;
+
+    DECLARE @HistoryId BIGINT = 692950;
+    DECLARE @NewValue DECIMAL(19,4) = 35.00;
+    DECLARE @XmlData XML;
+
+    -- ============================================================
+    -- 1. Load ONLY HistoryId = 692950
+    -- ============================================================
+
+    SELECT @XmlData = CAST(XmlData AS XML)
+    FROM History
+    WHERE HistoryId = @HistoryId;
 
 
-declare @XmlData xml; 
-declare @HistoryId Bigint;
-declare @Policynumber  nvarchar(50);
+    -- ============================================================
+    -- 2. Safety check
+    --
+    -- Make sure the targeted transaction is actually:
+    --     Type       = Tail
+    --     HistoryID  = 692950
+    --     Charge     = 6
+    --     TermPremium= 6
+    --     NewPremium = 6
+    --
+    -- If any value is different, THROW and make NO changes.
+    -- ============================================================
+
+    IF NOT EXISTS
+    (
+        SELECT 1
+        FROM
+        (
+            SELECT
+                T.N.value('(Type/text())[1]', 'nvarchar(50)') AS TransactionType,
+                T.N.value('(HistoryID/text())[1]', 'bigint') AS TransactionHistoryId,
+                T.N.value('(Charge/text())[1]', 'decimal(19,4)') AS Charge,
+                T.N.value('(TermPremium/text())[1]', 'decimal(19,4)') AS TermPremium,
+                T.N.value('(NewPremium/text())[1]', 'decimal(19,4)') AS NewPremium
+            FROM @XmlData.nodes(
+                '/session/data/policy/line/transactions/transaction'
+            ) AS T(N)
+        ) AS X
+        WHERE X.TransactionType = 'Tail'
+          AND X.TransactionHistoryId = @HistoryId
+          AND X.Charge = 6
+          AND X.TermPremium = 6
+          AND X.NewPremium = 6
+    )
+    BEGIN
+        THROW 50001,
+              'SAFETY CHECK FAILED: Expected Tail transaction with HistoryID 692950 and Charge/TermPremium/NewPremium = 6 was not found. No changes were made.',
+              1;
+    END;
 
 
-declare @WrittenPremium decimal(19, 4);
-declare @Change decimal(19, 4);
-declare @TotalPremium decimal(19, 4);
-declare @GrossPremium decimal(19, 4);
-declare @PartTimeCredit decimal(19, 4);
-declare @LCredit decimal(19, 4);
-declare @Credit decimal(19, 4);
-declare @RiskManagementCredit decimal(19, 4);
+    -- ============================================================
+    -- 3. Update ONLY Charge
+    -- ============================================================
 
- 
-declare @StateTax decimal(19,4);
-
-declare @EffectiveDate date;
-declare @ExpirationDate date;
-declare @TotalSurcharges int;
-declare @ClaimsPremium decimal(19,4);
---declare @TotalSurcharges decimal(19,4);
-declare @TodaysDate date;
+    SET @XmlData.modify('
+        replace value of
+        (
+            /session/data/policy/line/transactions/transaction
+            [Type="Tail" and HistoryID=sql:variable("@HistoryId")]
+            /Charge/text()
+        )[1]
+        with sql:variable("@NewValue")
+    ');
 
 
-Set @TodaysDate=GETDATE();
-Set @XmlData=null; 
-Set @HistoryId=692950; 
-Set @Policynumber=3223087;
+    -- ============================================================
+    -- 4. Update ONLY TermPremium
+    -- ============================================================
 
-Set @TotalPremium =35.00;
-Set @Change =35.00;
-Set @WrittenPremium =35.00;
-
-
-
--- Create Temp table with required XmlData
-Create table #TempTable (PolicyNum nvarchar(50), HistId bigint, XmlData text) 
-INSERT INTO #TempTable (PolicyNum, HistId, XmlData) 
-              SELECT Policynumber,HistoryId,XmlData 
-              FROM History Where HistoryId =@HistoryId;
-
- --Update Value in Temp Table
-  Select @XmlData=Cast(XmlData as XML) from #TempTable where HistId =@HistoryId;
- 
-   
-  
-  SET @XmlData.modify('replace value of (/session/data/TotalPremium/text())[1] with sql:variable("@TotalPremium")')
-  SET @XmlData.modify('replace value of (/session/data/policy/Premium/text())[1] with sql:variable("@TotalPremium")')
-
-  
-   SET @XmlData.modify('replace value of (/session/data/policy/line/Premium/text())[1] with sql:variable("@TotalPremium")')
-  SET @XmlData.modify('replace value of (/session/data/policy/line/risk/RiskCoverages/coverage[1]/DisplayRMBR/text())[1] with sql:variable("@TotalPremium")')
-  SET @XmlData.modify('replace value of (/session/data/policy/line/risk/RiskCoverages/coverage[1]/Premium/text())[1] with sql:variable("@TotalPremium")')
-
-  SET @XmlData.modify('replace value of (/session/data/TotalPurePremium/text())[1] with sql:variable("@TotalPremium")')
-
-  SET @XmlData.modify('replace value of (/session/data/policy/PurePremium/text())[1] with sql:variable("@TotalPremium")')
-  SET @XmlData.modify('replace value of (/session/data/policy/line/CancelledPremiumForTail/text())[1] with sql:variable("@TotalPremium")')
-  SET @XmlData.modify('replace value of (/session/data/policy/line/PurePremium/text())[1] with sql:variable("@TotalPremium")')
-  SET @XmlData.modify('replace value of (/session/data/policy/line/RiskTotalPremiums/text())[1] with sql:variable("@TotalPremium")')
-  SET @XmlData.modify('replace value of (/session/data/policy/line/RiskTotalPurePremiums/text())[1] with sql:variable("@TotalPremium")')
-  SET @XmlData.modify('replace value of (/session/data/policy/line/risk/Premium/text())[1] with sql:variable("@TotalPremium")')
-  SET @XmlData.modify('replace value of (/session/data/policy/line/risk/PurePremium/text())[1] with sql:variable("@TotalPremium")')
-
-  SET @XmlData.modify('replace value of (/session/data/TotalPurePremium/@change)[1] with sql:variable("@Change")')
-  SET @XmlData.modify('replace value of (/session/data/policy/ManualPremiumChange/text())[1] with sql:variable("@Change")')
-  SET @XmlData.modify('replace value of (/session/data/policy/LineTotalPurePremium/@change)[1] with sql:variable("@Change")')
-  SET @XmlData.modify('replace value of (/session/data/policy/PurePremium/@change)[1] with sql:variable("@Change")')
-  SET @XmlData.modify('replace value of (/session/data/policy/line/PurePremiumChange/text())[1] with sql:variable("@Change")')
-  SET @XmlData.modify('replace value of (/session/data/policy/line/RiskTotalPremiums/@change)[1] with sql:variable("@Change")')
-  SET @XmlData.modify('replace value of (/session/data/policy/line/RiskTotalPurePremiums/@change)[1] with sql:variable("@Change")')
-  SET @XmlData.modify('replace value of (/session/data/policy/line/risk/change/text())[1] with sql:variable("@Change")')
-  SET @XmlData.modify('replace value of (/session/data/policy/line/risk/PurePremium/change/text())[1] with sql:variable("@Change")')
-  SET @XmlData.modify('replace value of (/session/data/policy/line/risk/RiskCoverages/coverage[1]/change/text())[1] with sql:variable("@Change")')
-  SET @XmlData.modify('replace value of (/session/data/TotalPremium/@change)[1] with sql:variable("@Change")')
-  SET @XmlData.modify('replace value of (/session/data/policy/PremiumChange/text())[1] with sql:variable("@Change")')
-  SET @XmlData.modify('replace value of (/session/data/policy/LineTotalPremium/@change)[1] with sql:variable("@Change")')
-  SET @XmlData.modify('replace value of (/session/data/policy/line/change/text())[1] with sql:variable("@Change")')
+    SET @XmlData.modify('
+        replace value of
+        (
+            /session/data/policy/line/transactions/transaction
+            [Type="Tail" and HistoryID=sql:variable("@HistoryId")]
+            /TermPremium/text()
+        )[1]
+        with sql:variable("@NewValue")
+    ');
 
 
+    -- ============================================================
+    -- 5. Update ONLY NewPremium
+    -- ============================================================
 
-  SET @XmlData.modify('replace value of (/session/data/TotalPremium/@written)[1] with sql:variable("@WrittenPremium")')  
-SET @XmlData.modify('replace value of (/session/data/policy/PremiumWritten/text())[1] with sql:variable("@WrittenPremium")')
-SET @XmlData.modify('replace value of (/session/data/policy/ManualPremiumWritten/text())[1] with sql:variable("@WrittenPremium")')
-  SET @XmlData.modify('replace value of (/session/data/policy/LineTotalPremium/@written)[1] with sql:variable("@WrittenPremium")')
-  SET @XmlData.modify('replace value of (/session/data/policy/LineTotalPurePremium/@written)[1] with sql:variable("@WrittenPremium")')  
-SET @XmlData.modify('replace value of (/session/data/policy/PurePremium/@written)[1] with sql:variable("@WrittenPremium")')
-SET @XmlData.modify('replace value of (/session/data/policy/line/written/text())[1] with sql:variable("@WrittenPremium")')
-  SET @XmlData.modify('replace value of (/session/data/policy/line/PurePremiumWritten/text())[1] with sql:variable("@WrittenPremium")')
-  SET @XmlData.modify('replace value of (/session/data/policy/line/RiskTotalPremiums/@written)[1] with sql:variable("@WrittenPremium")')
-  SET @XmlData.modify('replace value of (/session/data/policy/line/RiskTotalPurePremiums/@written)[1] with sql:variable("@WrittenPremium")')
-  SET @XmlData.modify('replace value of (/session/data/policy/line/risk/written/text())[1] with sql:variable("@WrittenPremium")')
-   SET @XmlData.modify('replace value of (/session/data/policy/line/risk/RiskCoverages/coverage[1]/written/text())[1] with sql:variable("@WrittenPremium")')
-
-
+    SET @XmlData.modify('
+        replace value of
+        (
+            /session/data/policy/line/transactions/transaction
+            [Type="Tail" and HistoryID=sql:variable("@HistoryId")]
+            /NewPremium/text()
+        )[1]
+        with sql:variable("@NewValue")
+    ');
 
 
-  
-  
-                              Update #TempTable set XmlData=Cast(@XmlData as varchar(Max)) where HistId =@HistoryId;
+    -- ============================================================
+    -- 6. Update ONLY History.XMLData
+    --
+    -- No other relational columns are changed.
+    -- ============================================================
 
--- Update into History table
+    UPDATE History
+    SET XmlData = CAST(@XmlData AS VARCHAR(MAX))
+    WHERE HistoryId = @HistoryId;
 
-                              UPDATE History SET History.XMLData = #TempTable.XmlData FROM History,#TempTable WHERE History.HistoryId = #TempTable.HistId 
-                              UPDATE History SET History.WrittenPremium=@WrittenPremium , ChangeDate=@TodaysDate, History.ChangePremium=@Change  FROM History,#TempTable WHERE History.HistoryId = #TempTable.HistId
 
-                              DROP TABLE #TempTable 
+    -- ============================================================
+    -- 7. Verify the exact transaction BEFORE COMMIT
+    -- ============================================================
 
-COMMIT
+    SELECT
+        T.N.value('(Type/text())[1]', 'nvarchar(50)') AS TransactionType,
+        T.N.value('(HistoryID/text())[1]', 'bigint') AS TransactionHistoryId,
+        T.N.value('(Charge/text())[1]', 'decimal(19,4)') AS Charge,
+        T.N.value('(TermPremium/text())[1]', 'decimal(19,4)') AS TermPremium,
+        T.N.value('(NewPremium/text())[1]', 'decimal(19,4)') AS NewPremium
+    FROM @XmlData.nodes(
+        '/session/data/policy/line/transactions/transaction'
+    ) AS T(N)
+    WHERE T.N.value('(Type/text())[1]', 'nvarchar(50)') = 'Tail'
+      AND T.N.value('(HistoryID/text())[1]', 'bigint') = @HistoryId;
 
-Stop:
+
+    -- ============================================================
+    -- 8. COMMIT
+    -- ============================================================
+
+    COMMIT TRANSACTION;
 
 END TRY
+
 BEGIN CATCH
 
-       select ERROR_MESSAGE() as ErrorMessage
-
     IF @@TRANCOUNT > 0
-        ROLLBACK
-END CATCH
+        ROLLBACK TRANSACTION;
 
+    SELECT
+        ERROR_NUMBER() AS ErrorNumber,
+        ERROR_MESSAGE() AS ErrorMessage,
+        'ROLLBACK - NO CHANGES COMMITTED' AS Status;
 
+    THROW;
 
-SELECT
-    HistoryId,
-    CAST(XmlData AS XML).value(
-        '(/session/data/TotalPremium/text())[1]',
-        'decimal(19,4)'
-    ) AS TotalPremium,
-
-    CAST(XmlData AS XML).value(
-        '(/session/data/policy/Premium/text())[1]',
-        'decimal(19,4)'
-    ) AS PolicyPremium,
-
-    CAST(XmlData AS XML).value(
-        '(/session/data/policy/PremiumWritten/text())[1]',
-        'decimal(19,4)'
-    ) AS PremiumWritten
-FROM History
-WHERE HistoryId = 692950;
-
-
-
-SELECT
-    HistoryId,
-    PolicyNumber,
-    CAST(XmlData AS XML)
-FROM History
-WHERE HistoryId = 692950;
+END CATCH;
+```
