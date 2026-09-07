@@ -188,3 +188,14 @@ FROM @XmlData.nodes(
     '/session/data/policy/line/transactions/transaction'
 ) AS T(N);
 ```
+
+
+``` sql
+USE PAC_Policy;
+
+SELECT
+    HistoryId,
+    CAST(XmlData AS VARCHAR(MAX)) AS XmlData
+FROM History
+WHERE HistoryId = 692950;
+```
