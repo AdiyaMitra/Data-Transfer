@@ -151,3 +151,39 @@ BEGIN CATCH
 
 END CATCH;
 ```
+
+
+
+
+
+
+
+
+
+USE PAC_Policy;
+
+DECLARE @HistoryId BIGINT = 692950;
+DECLARE @XmlData XML;
+
+SELECT @XmlData = CAST(XmlData AS XML)
+FROM History
+WHERE HistoryId = @HistoryId;
+
+-- Check whether History row was found
+SELECT
+    CASE
+        WHEN @XmlData IS NULL THEN 'XML DATA IS NULL / HISTORY ROW NOT FOUND'
+        ELSE 'XML DATA LOADED'
+    END AS Status;
+
+
+-- Show ALL transactions from this History record
+SELECT
+    T.N.value('(Type/text())[1]', 'nvarchar(50)') AS TransactionType,
+    T.N.value('(HistoryID/text())[1]', 'bigint') AS TransactionHistoryId,
+    T.N.value('(Charge/text())[1]', 'decimal(19,4)') AS Charge,
+    T.N.value('(TermPremium/text())[1]', 'decimal(19,4)') AS TermPremium,
+    T.N.value('(NewPremium/text())[1]', 'decimal(19,4)') AS NewPremium
+FROM @XmlData.nodes(
+    '/session/data/policy/line/transactions/transaction'
+) AS T(N);
