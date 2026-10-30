@@ -1,3 +1,4 @@
+
 USE PAC_Policy;
 GO
 
@@ -9,7 +10,6 @@ CREATE OR ALTER PROCEDURE dbo.UpdateHistoryPremiumInXML
 AS
 BEGIN
     SET NOCOUNT ON;
-    SET XACT_ABORT ON;
 
     DECLARE @XmlText VARCHAR(MAX);
     DECLARE @OriginalXml VARCHAR(MAX);
@@ -27,26 +27,26 @@ BEGIN
 
         IF @XmlText IS NULL
         BEGIN
-            THROW 50001, 'History record not found or XMLData is NULL.', 1;
+            RAISERROR('History record not found or XMLData is NULL.', 16, 1);
         END;
 
         SET @OriginalXml = @XmlText;
 
-        -- Replace EVERY occurrence of 3294 with 2040
+        -- Replace every occurrence of 3294 with 2040
         SET @XmlText = REPLACE(@XmlText, '3294', '2040');
 
         -- Check whether any replacement occurred
         IF @XmlText = @OriginalXml
         BEGIN
-            THROW 50002, 'No occurrence of 3294 found in XML.', 1;
+            RAISERROR('No occurrence of 3294 found in XML.', 16, 1);
         END;
 
-        -- Validate the modified XML
+        -- Validate modified XML
         SET @XmlCheck = TRY_CONVERT(XML, @XmlText);
 
         IF @XmlCheck IS NULL
         BEGIN
-            THROW 50003, 'Updated XML is invalid. Changes rolled back.', 1;
+            RAISERROR('Updated XML is invalid. Changes rolled back.', 16, 1);
         END;
 
         -- Update XMLData
@@ -57,7 +57,7 @@ BEGIN
 
         IF @@ROWCOUNT <> 1
         BEGIN
-            THROW 50004, 'History XML update failed.', 1;
+            RAISERROR('History XML update failed.', 16, 1);
         END;
 
         COMMIT TRANSACTION;
@@ -74,11 +74,10 @@ BEGIN
         IF @@TRANCOUNT > 0
             ROLLBACK TRANSACTION;
 
-        THROW;
+        SELECT
+            ERROR_NUMBER() AS ErrorNumber,
+            ERROR_MESSAGE() AS ErrorMessage;
 
     END CATCH;
 END;
 GO
-
-
-<img width="1645" height="340" alt="image" src="https://github.com/user-attachments/assets/719e036d-9656-470c-b6e6-dcd4c08f3c93" />
